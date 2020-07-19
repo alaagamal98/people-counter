@@ -6,70 +6,147 @@ questions.
 
 ## Explaining Custom Layers
 
-The process behind converting custom layers involves...
+### Custom Layers implementation
 
-While converting pre-trained model into IR, Model Optimizer searches for each layer of the input model in the list of known layers.The list of known layers is different for each of supported frameworks.
+When implementing a custom layer for your pre-trained model in the
+Open Vino toolkit, you will need to add extensions to both the Model 
+Optimizer and the Inference Engine.
 
-Custom layers are layers that are not included into a list of known layers. If your topology contains any layers that are not in the list of known layers, the Model Optimizer classifies them as custom.
+#### Model optimizer
 
-When implementing a custom layer for the model, we need to add extensions to both the Model Optimizer and the Inference Engine.While loading IR in inference Engine, if we encounter unsupported layers then we should use cpu extension
+The following figure shows the basic processing steps for the Model Optimizer highlighting the two necessary custom layer extensions, the Custom Layer Extractor and the Custom Layer Operation.
 
-> Note: The primary CPU extension file differs in naming between Linux and Mac. On Linux, the name is libcpu_extension_sse4.so, while on Mac it is libcpu_extension.dylib.
+![](images/MO_extensions_flow.png)
 
-Some of the potential reasons for handling custom layers are...
+The Model Optimizer first extracts information from the input model which includes the topology of the model layers along with parameters, input and output format, etc., for each layer. The model is then optimized from the various known characteristics of the layers, interconnects, and data flow which partly comes from the layer operation providing details including the shape of the output for each layer. Finally, the optimized model is output to the model IR files needed by the Inference Engine to run the model.
 
-* We need to handle custom layers otherwise model optimizer can not convert pre-trained model into IR format.
+There are majorly two custom layer extensions required-
 
+1. Custom Layer Extractor
+
+Responsible for identifying the custom layer operation and extracting the parameters for each instance of the custom layer. The layer parameters are stored per instance and used by the layer operation before finally appearing in the output IR. Typically the input layer parameters are unchanged, which is the case covered by this tutorial.
+
+2. Custom Layer Operation
+
+Responsible for specifying the attributes that are supported by the custom layer and computing the output shape for each instance of the custom layer from its parameters. The `--mo-op` command-line argument shown in the examples below generates a custom layer operation for the Model Optimizer.
+
+#### Inference Engine
+
+The following figure shows the basic flow for the Inference Engine highlighting two custom layer extensions for the CPU and GPU Plugins, the Custom Layer CPU extension and the Custom Layer GPU Extension.
+
+![](images/IE_extensions_flow.png)
+
+Each device plugin includes a library of optimized implementations to execute known layer operations which must be extended to execute a custom layer. The custom layer extension is implemented according to the target device:
+
+1. Custom Layer CPU Extension
+
+A compiled shared library (`.so` or `.dll` binary) needed by the CPU Plugin for executing the custom layer on the CPU.
+
+2. Custom Layer GPU Extension
+
+OpenCL source code (`.cl`) for the custom layer kernel that will be compiled to execute on the GPU along with a layer description file (`.xml`) needed by the GPU Plugin for the custom layer kernel.
+
+#### Using the model extension generator
+
+The Model Extension Generator tool generates template source code files for each of the extensions needed by the Model Optimizer and the Inference Engine.
+
+The script for this is available here-  `/opt/intel/openvino/deployment_tools/tools/extension_generator/extgen.py`
+
+You could use this script in the following manner:
+
+```
+usage: You can use any combination of the following arguments:
+
+Arguments to configure extension generation in the interactive mode:
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --mo-caffe-ext        generate a Model Optimizer Caffe* extractor
+  --mo-mxnet-ext        generate a Model Optimizer MXNet* extractor
+  --mo-tf-ext           generate a Model Optimizer TensorFlow* extractor
+  --mo-op               generate a Model Optimizer operation
+  --ie-cpu-ext          generate an Inference Engine CPU extension
+  --ie-gpu-ext          generate an Inference Engine GPU extension
+  --output_dir OUTPUT_DIR
+                        set an output directory. If not specified, the current
+                        directory is used by default.
+```
+
+### Reasons for handling custom layers
+
+In industry problems it becomes very important to be able to convert custom layers as your teams might be developing something new or researching on something and your application to work smoothly you would need to know how you could have support for custom layers.
+
+Another common use case would be when using `lambda` layers. These layers are where you could add an arbitary peice of code to your model implementation. You would need to have support for these kind of layers and custom layers is your way 
+
+#### my sourse:
+<details>
+  <summary>Source</summary>
+  https://docs.openvinotoolkit.org/
+</details>
 
 ## Comparing Model Performance
 
-My method(s) to compare models before and after conversion to Intermediate Representations
-were...
+There are two main metrics that are to be seen here.
+1. Accuracy
+2. Speed
 
-##### Accuracy Comparison
-The difference between model accuracy pre- and post-conversion was...
-Accuracy of the pre-conversion model and post-conversion both are approx. same and good.
+Accuracy can be simply measured by comparing the results with human labelled data.
 
-##### Size Comparison
-The size of the model pre- and post-conversion was...
-Size of the pre-conversion model i.e. `fozen inference graph(.pb file) = 69.7 MB` and size of the pos-conversion model i.e. `xml+bin file = 67.5 MB`
+For speed we can measure the inference time.
 
-##### Inference time Comparison
-The inference time of the model pre- and post-conversion was...
-Average Inference time of post conversion model is approx. 75 times more than pre conversion model.
+After conversion, 
+
+- Accuracy decreases because of decrease in floating point precision.
+
+- Speed increases because of freezing, fusion and quantization.
+
+- The size of the model also decreases.
+
+|System |Accuracy (mAP)  |Time (ms)  |Size (MB)  |
+|---|---|---|---|
+|Pre-Conversion   |21   |55   |28   |
+|Post-Conversion   |21   |60   |26   |
+
 
 ## Assess Model Use Cases
 
-Some of the potential use cases of the people counter app are...
-1. People counter app can be used in Malls and grocery stores to do comparison analysis between Malls about their popularity. More people visits means more popularity.
+Some of the potential use cases of the people counter app are:
 
-2. It can be used to analyze the duration between two people thus can be deployed worldwide during COVID-19 pandemic.
+1. Monitoring of civilian movements within public places such as parks, banks, theme parks, cinemas and so on during the period of the COVID-19 lockdown.
 
-3. It can be used to monitor people in restricted areas.
+2. To detect intruders in restricted areas or private properties. The app does this by raising an alarm when it detects a person within the camera's range of vision.
 
-Each of these use cases would be useful because...
-1. It gives popularity statistics.
-2. Helps in enforcing social distancing in global pandemic like COVID-19.
-3. Helps in preventing intrusions in restricted areas.
+3. It can be used on drones to be deployed by first responders to cover a lot of ground in a short period of time, reducing response time and in turn increase the rate of success of search and rescue missions conducted in large areas.
+
+4. Searching city-wide or nation-wide areas for wanted felons using cameras in a city combined with the people counter app equipped with a model trained to detect that individual felon or a group of felons.
+
 
 ## Assess Effects on End User Needs
 
-Lighting, model accuracy, and camera focal length/image size have different effects on a
-deployed edge model. The potential effects of each of these are as follows...
+The People Counter app can be used in many ways. For example, you could put a camera in front of a shop, bank, or train station. The app can count how many people are in the facility. This amount can be compared to the number of people allowed in the facility. If there are too many people, an alarm is sent. A pipeline of other models could be implemented. Ex: Corona mask recognition.
 
-1. Lighting : Lighting can effects the accuracy of model prediction as low lighting condition makes difficult to detect person in the frame.
-2. Model accuracy : Model accuracy is most crucial factor as where higher model accuracy is favorable, lower model accuracy can have false results.
-3. Focal length : Focal length doesn't have much effect and totally depends on use case or requirement of users.
-4. Image Size : Image Size can have great effect as higher resolution image can potentially give correct result.
+## Model Research
 
-## Model Used 
+[This heading is only required if a suitable model was not found after trying out at least three
+different models. However, you may also use this heading to detail how you converted 
+a successful model.]
 
-* Download the model from [here](http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v2_coco_2018_03_29.tar.gz)
+In investigating potential people counter models, I tried each of the following three models:
 
-## Command Used to Convert .pb file into IR 
+- Model 1: [Name]
+  - [Model Source]
+  - I converted the model to an Intermediate Representation with the following arguments...
+  - The model was insufficient for the app because...
+  - I tried to improve the model for the app by...
+  
+- Model 2: [Name]
+  - [Model Source]
+  - I converted the model to an Intermediate Representation with the following arguments...
+  - The model was insufficient for the app because...
+  - I tried to improve the model for the app by...
 
-I used below command to convert frozen inference graph (.pb) file into Intermediate Representation (xml + bin)
-
-```py
-python /opt/intel/openvino/deployment_tools/model_optimizer/mo_tf.py --input_model frozen_inference_graph.pb --tensorflow_object_detection_api_pipeline_config pipeline.config --tensorflow_use_custom_operations_config /opt/intel/openvino/deployment_tools/model_optimizer/extensions/front/tf/ssd_v2_support.json --reverse_input_channel
-```
+- Model 3: [Name]
+  - [Model Source]
+  - I converted the model to an Intermediate Representation with the following arguments...
+  - The model was insufficient for the app because...
+  - I tried to improve the model for the app by...
