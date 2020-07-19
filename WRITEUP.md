@@ -14,9 +14,6 @@ Optimizer and the Inference Engine.
 
 #### Model optimizer
 
-The following figure shows the basic processing steps for the Model Optimizer highlighting the two necessary custom layer extensions, the Custom Layer Extractor and the Custom Layer Operation.
-
-![](images/MO_extensions_flow.png)
 
 The Model Optimizer first extracts information from the input model which includes the topology of the model layers along with parameters, input and output format, etc., for each layer. The model is then optimized from the various known characteristics of the layers, interconnects, and data flow which partly comes from the layer operation providing details including the shape of the output for each layer. Finally, the optimized model is output to the model IR files needed by the Inference Engine to run the model.
 
@@ -32,9 +29,6 @@ Responsible for specifying the attributes that are supported by the custom layer
 
 #### Inference Engine
 
-The following figure shows the basic flow for the Inference Engine highlighting two custom layer extensions for the CPU and GPU Plugins, the Custom Layer CPU extension and the Custom Layer GPU Extension.
-
-![](images/IE_extensions_flow.png)
 
 Each device plugin includes a library of optimized implementations to execute known layer operations which must be extended to execute a custom layer. The custom layer extension is implemented according to the target device:
 
