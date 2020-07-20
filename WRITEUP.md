@@ -8,71 +8,42 @@ questions.
 
 ### Custom Layers implementation
 
-When implementing a custom layer for your pre-trained model in the
-Open Vino toolkit, you will need to add extensions to both the Model 
-Optimizer and the Inference Engine.
+When applying a custom layer for your pre-trained model in the Open Vino toolkit, add extensions to both of Model Optimizer, and Inference Engine.
 
 #### Model optimizer
 
+For each layer, the Model Optimizer initially derives data from the input model that includes model layer topology along with parameters, input and output format, etc. The model then is configured from the different known features of the layers, interconnects, and flow of data that comes partly from the layer process offering information like output shape for each layer. The optimized model is finally output to the model IR files required by the Inference Engine for running the model.
 
-The Model Optimizer first extracts information from the input model which includes the topology of the model layers along with parameters, input and output format, etc., for each layer. The model is then optimized from the various known characteristics of the layers, interconnects, and data flow which partly comes from the layer operation providing details including the shape of the output for each layer. Finally, the optimized model is output to the model IR files needed by the Inference Engine to run the model.
-
-There are majorly two custom layer extensions required-
+There are majorly two custom layer extensions required:
 
 1. Custom Layer Extractor
 
-Responsible for identifying the custom layer operation and extracting the parameters for each instance of the custom layer. The layer parameters are stored per instance and used by the layer operation before finally appearing in the output IR. Typically the input layer parameters are unchanged, which is the case covered by this tutorial.
+Accountable for the identification of custom layer operation and the abstraction of the parameters for each custom layer instance. For instance the layer parameters are preserved and used by the layer operation before eventually emerging in the output IR. Usually the parameters of the input layer are unaffected.
 
 2. Custom Layer Operation
 
-Responsible for specifying the attributes that are supported by the custom layer and computing the output shape for each instance of the custom layer from its parameters. The `--mo-op` command-line argument shown in the examples below generates a custom layer operation for the Model Optimizer.
+Accountable for defining the attributes supported by the custom layer, and calculating the output shape from its parameters at each instance of the custom layer. 
 
 #### Inference Engine
 
-
-Each device plugin includes a library of optimized implementations to execute known layer operations which must be extended to execute a custom layer. The custom layer extension is implemented according to the target device:
+Each device plugin contains a library of optimized configurations to perform known layer operations that need to be expanded to perform a custom layer. The extension of custom layer is applied according to the targeted device:
 
 1. Custom Layer CPU Extension
 
-A compiled shared library (`.so` or `.dll` binary) needed by the CPU Plugin for executing the custom layer on the CPU.
+The CPU Plugin requires a compiled shared library (`.so` or `.dll` binary) to execute the custom layer on CPU.
 
 2. Custom Layer GPU Extension
 
-OpenCL source code (`.cl`) for the custom layer kernel that will be compiled to execute on the GPU along with a layer description file (`.xml`) needed by the GPU Plugin for the custom layer kernel.
-
-#### Using the model extension generator
-
-The Model Extension Generator tool generates template source code files for each of the extensions needed by the Model Optimizer and the Inference Engine.
-
-The script for this is available here-  `/opt/intel/openvino/deployment_tools/tools/extension_generator/extgen.py`
-
-You could use this script in the following manner:
-
-```
-usage: You can use any combination of the following arguments:
-
-Arguments to configure extension generation in the interactive mode:
-
-optional arguments:
-  -h, --help            show this help message and exit
-  --mo-caffe-ext        generate a Model Optimizer Caffe* extractor
-  --mo-mxnet-ext        generate a Model Optimizer MXNet* extractor
-  --mo-tf-ext           generate a Model Optimizer TensorFlow* extractor
-  --mo-op               generate a Model Optimizer operation
-  --ie-cpu-ext          generate an Inference Engine CPU extension
-  --ie-gpu-ext          generate an Inference Engine GPU extension
-  --output_dir OUTPUT_DIR
-                        set an output directory. If not specified, the current
-                        directory is used by default.
-```
+OpenCL source code (`.cl`) for the custom layer kernel that will be compiled to run on GPU together with a layer description file (`.xml`) provided for the custom layer kernel by GPU Plug-in.
 
 ### Reasons for handling custom layers
 
-In industry problems it becomes very important to be able to convert custom layers as your teams might be developing something new or researching on something and your application to work smoothly you would need to know how you could have support for custom layers.
+It becomes very important in industry challenges to also be able to transform custom layers because your teams may be designing something new or working on something and your system will need to know how to help custom layers to function smoothly.
 
-Another common use case would be when using `lambda` layers. These layers are where you could add an arbitary peice of code to your model implementation. You would need to have support for these kind of layers and custom layers is your way 
+One other popular use case would be to use the `lambda` layers.  Those layers are where you might add to your model architecture an arbitrary portion of code. You'd need support for these types of layers and custom layers are your way.
 
 #### my sourse:
+
 <details>
   <summary>Source</summary>
   https://docs.openvinotoolkit.org/
@@ -80,44 +51,43 @@ Another common use case would be when using `lambda` layers. These layers are wh
 
 ## Comparing Model Performance
 
-There are two main metrics that are to be seen here.
+There are two principal metrics to be used here.
+
 1. Accuracy
 2. Speed
 
-Accuracy can be simply measured by comparing the results with human labelled data.
+Accuracy can be computed simply by analyzing the results with data labelled by humans. 
 
-For speed we can measure the inference time.
+We can quantify the inference time for speed. 
 
 After conversion, 
 
-- Accuracy decreases because of decrease in floating point precision.
+- Accuracy drops due to reduced floating point precision. 
 
-- Speed increases because of freezing, fusion and quantization.
+- Freezing, fusion, and quantization increases speed. 
 
-- The size of the model also decreases.
+- Model size decreases, too.
 
 |System |Accuracy (mAP)  |Time (ms)  |Size (MB)  |
 |---|---|---|---|
 |Pre-Conversion   |21   |55   |28   |
 |Post-Conversion   |21   |60   |26   |
 
-
 ## Assess Model Use Cases
 
-Some of the potential use cases of the people counter app are:
+Some of the people counter app's potentially use cases are: 
 
-1. Monitoring of civilian movements within public places such as parks, banks, theme parks, cinemas and so on during the period of the COVID-19 lockdown.
+1. Tracking of citizens movements during the COVID-19 shutdown in public areas like parks, banks, theme parks, cinemas and so on. 
 
-2. To detect intruders in restricted areas or private properties. The app does this by raising an alarm when it detects a person within the camera's range of vision.
+2. Detecting intruders in enclosed spaces or private property. The device does so by triggering an alert when detecting a human within the field of view of the camera. 
 
-3. It can be used on drones to be deployed by first responders to cover a lot of ground in a short period of time, reducing response time and in turn increase the rate of success of search and rescue missions conducted in large areas.
+3. This can be used on drones to be used by first responders to cover more ground in a short time , minimizing response time and in effect increasing the success rate of search and rescue operations carried out in wide areas.
 
-4. Searching city-wide or nation-wide areas for wanted felons using cameras in a city combined with the people counter app equipped with a model trained to detect that individual felon or a group of felons.
-
+4. Using cameras in a community coupled with the people counter software fitted with a model trained to identify the particular felon or a group of felons, scanning citywide or national areas for wanted felons.
 
 ## Assess Effects on End User Needs
 
-The People Counter app can be used in many ways. For example, you could put a camera in front of a shop, bank, or train station. The app can count how many people are in the facility. This amount can be compared to the number of people allowed in the facility. If there are too many people, an alarm is sent. A pipeline of other models could be implemented. Ex: Corona mask recognition.
+One can use the People Counter software in many ways. You might for example place a camera in front of a store, bank, or train station. The software will quantify how many people there are in the facility. That figure can be contrasted with the number of people allowed inside the building. When too many people are there, then an alert will be sent. They could incorporate a pipeline of other models. Ex: Identification of a corona mask.
 
 ## Model Research
 
