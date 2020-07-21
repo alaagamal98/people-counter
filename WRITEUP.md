@@ -1,18 +1,13 @@
-# The Feedback Says There's Plagarism When There's Really NOT
-
-I would like to understand where the plagarism is coming from as it is saud to come from this link:  https://github.com/prateeksawhney97/People-Counter-Application-Using-Intel-OpenVINO-Toolkit
-
-and when i checked it, i found that my work is different an i am acually using different functions, maybe there's a few similarities but it is not alot at all and it is really not on purpose.
-
-in my first few submission there was key parts that i didn't understand so i used so codes and it was not even from this link, but after i understood i wrote it all again by myself, so i would really like to understand what is excatly wrong with my code.
-
-all the code that i submitted today is completely mine.
-
 # Project Write-Up
 
 You can use this document as a template for providing your project write-up. However, if you
 have a different format you prefer, feel free to use it as long as you answer all required
 questions.
+
+## The Model Used For This Project
+
+Download the pre-trained model from [here](http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v2_coco_2018_03_29.tar.gz)
+
 
 ## Explaining Custom Layers
 

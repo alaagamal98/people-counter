@@ -127,7 +127,6 @@ def infer_on_stream(args, client):
     timing=0
     prev_bounding_box = 0
     req_id = 0
-    total_counter = 0
 
     while cap.isOpened():
         
@@ -147,7 +146,7 @@ def infer_on_stream(args, client):
 
             network_output = infer_network.get_output()
             
-            frame, pres_counter, bounding_box = frame, pres_counter, bounding_box = extract_box(frame.copy(), network_output, probability_threshold)
+            frame, pres_counter, bounding_box = extract_box(frame.copy(), network_output, probability_threshold)
             box_width = frame.shape[1]
             tl, br = bounding_box 
         
@@ -166,7 +165,7 @@ def infer_on_stream(args, client):
                     num_bounding_box=0
                 else:
                     timing = int(time.time()-beginning_time)
-                    client.publish("person/time", json.dumps({"time":timing}))
+                    client.publish("person/duration", json.dumps({"duration":timing}))
 
             if not (tl==None and br==None):
                 prev_bounding_box=int((tl[0]+br[0])/2)
@@ -184,7 +183,6 @@ def infer_on_stream(args, client):
     if one_image:
         cv2.imwrite('output_image.jpg', frame)
             
-
     cap.release()
     client.disconnect()
 
