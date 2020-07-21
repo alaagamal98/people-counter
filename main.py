@@ -19,17 +19,14 @@
  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 
-
 import os
 import sys
 import time
 import socket
 import json
 import cv2
-
 import logging as log
 import paho.mqtt.client as mqtt
-
 from argparse import ArgumentParser
 from inference import Network
 
@@ -62,17 +59,15 @@ def build_argparser():
                              "CPU, GPU, FPGA or MYRIAD is acceptable. Sample "
                              "will look for a suitable plugin for device "
                              "specified (CPU by default)")
-    parser.add_argument("-pt", "--prob_threshold", type=float, default=0.5,
+    parser.add_argument("-pt", "--probability_threshold", type=float, default=0.5,
                         help="Probability threshold for detections filtering"
                         "(0.5 by default)")
     return parser
 
 
 def connect_mqtt():
-    ### TODO: Connect to the MQTT client ###
     client = mqtt.Client()
     client.connect(MQTT_HOST, MQTT_PORT, MQTT_KEEPALIVE_INTERVAL)
-
     return client
 
 
@@ -88,120 +83,97 @@ def infer_on_stream(args, client):
     # Initialise the class
     infer_network = Network()
     # Set Probability threshold for detections
-    prob_threshold = args.prob_threshold
+    probability_threshold = args.probability_threshold
+    one_image = False
 
-    ### TODO: Load the model through `infer_network` ###
     infer_network.load_model(args.model, args.device, args.cpu_extension)
     network_shape = infer_network.get_input_shape()
-
-    ### TODO: Handle the input stream ###
     if args.input == 'CAM': 
-        input_validation = 0
-    
-        # Checks for input image
+        validator = 0
     elif args.input.endswith('.jpg') or args.input.endswith('.bmp') :
-        single_image_mode = True
-        input_validation = args.input
-
-    # Checks for video file
+        one_image = True
+        validator = args.input
     else:
-        input_validation = args.input
+        validator = args.input
         assert os.path.isfile(args.input), "file doesn't exist"
         
-    
-    ### TODO: Loop until stream is over ###
-    cap = cv2.VideoCapture(input_validation)
-    w = int(cap.get(3))
-    h = int(cap.get(4))
-    if input_validation:
+    cap = cv2.VideoCapture(validator)
+    width = int(cap.get(3))
+    height = int(cap.get(4))
+    if validator:
         cap.open(args.input)
     if not cap.isOpened():
         log.error("Error: No video source")
     
     ### Variables
-    duration_prev = 0
-    counter_total = 0
+    previous_duration = 0
     dur = 0
-    request_id=0
-    duration_report = None
+    req_id=0
+    dur_report = None
     report = 0
     counter = 0
-    counter_prev = 0
-    single_image_mode = False
+    previous_counter = 0
+    total_counter = 0
 
     while cap.isOpened():
-        ### TODO: Read from the video capture ###
+
         flag, frame = cap.read()
-        prob_threshold = args.prob_threshold
+        probability_threshold = args.probability_threshold
         if not flag:
             break
-  
         key_pressed = cv2.waitKey(60)
 
-        ### TODO: Pre-process the image as needed ###
-        image = cv2.resize(frame, (network_shape[3], network_shape[2]))
-        image = image.transpose((2, 0, 1))
-        image = image.reshape(1, *image.shape)
+        processed_image = cv2.resize(frame, (network_shape[3], network_shape[2]))
+        processed_image = processed_image.transpose((2, 0, 1))
+        processed_image = processed_image.reshape(1, *processed_image.shape)
         
-        ### TODO: Start asynchronous inference for specified request ###
-        infer_network.exec_net(image)
-        inf_start_time = time.time()
+        infer_network.exec_net(processed_image)
 
-        ### TODO: Wait for the result ###
-        if infer_network.wait(request_id) == 0:
-            
-            det_time = time.time() - inf_start_time
-            current_count = 0
-            ### TODO: Get the results of the inference request ###
-            net_output = infer_network.get_output()
+        if infer_network.wait(req_id) == 0:
 
-            ### TODO: Extract any desired stats from the results ###
+            network_output = infer_network.get_output()
 
-            pointer = 0
-            probs = net_output[0, 0, :, 2]
-            for i, p in enumerate(probs):
-                if p > prob_threshold:
-                    pointer += 1
-                    box = net_output[0, 0, i, 3:]
-                    p1 = (int(box[0] * w), int(box[1] * h))
-                    p2 = (int(box[2] * w), int(box[3] * h))
-                    frame = cv2.rectangle(frame, p1, p2, (0, 255, 0), 3)
+            check = 0
+            probabilities = network_output[0, 0, :, 2]
+            for i, p in enumerate(probabilities):
+                if p > probability_threshold:
+                    check += 1
+                    box = network_output[0, 0, i, 3:]
+                    p_1 = (int(box[0] * width), int(box[1] * height))
+                    p_2 = (int(box[2] * width), int(box[3] * height))
+                    frame = cv2.rectangle(frame, p_1, p_2, (0, 255, 0), 3)
         
-            if pointer != counter:
-                counter_prev = counter
-                counter = pointer
+            if check != counter:
+                previous_counter = counter
+                counter = check
                 if dur >= 3:
-                    duration_prev = dur
+                    previous_duration = dur
                     dur = 0
                 else:
-                    dur = duration_prev + dur
-                    duration_prev = 0  # unknown, not needed in this case
+                    dur = previous_duration + dur
+                    previous_duration = 0  
             else:
                 dur += 1
                 if dur >= 3:
                     report = counter
-                    if dur == 3 and counter > counter_prev:
-                        counter_total += counter - counter_prev
-                    elif dur == 3 and counter < counter_prev:
-                        duration_report = int((duration_prev / 10.0) * 1000)
+                    if dur == 3 and counter > previous_counter:
+                        total_counter += counter - previous_counter
+                    elif dur == 3 and counter < previous_counter:
+                        dur_report = int((previous_duration / 10.0) * 1000)
 
-            ### TODO: Calculate and send relevant information on ###
-            ### current_count, total_count and duration to the MQTT server ###
-            ### Topic "person": keys of "count" and "total" ###
-            ### Topic "person/duration": key of "duration" ###
             client.publish('person',
                            payload=json.dumps({
-                               'count': report, 'total': counter_total}),
+                               'count': report, 'total': total_counter}),
                            qos=0, retain=False)
-            if duration_report is not None:
+            if dur_report is not None:
                 client.publish('person/duration',
-                               payload=json.dumps({'duration': duration_report}),
+                               payload=json.dumps({'duration': dur_report}),
                                qos=0, retain=False)
-        ### TODO: Send the frame to the FFMPEG server ###
+
         sys.stdout.buffer.write(frame)
         sys.stdout.flush()
-        ### TODO: Write an output image if `single_image_mode` ###
-        if single_image_mode:
+
+        if one_image:
             cv2.imwrite('output_image.jpg', frame)
             
     cap.release()
