@@ -39,10 +39,9 @@ class Network:
         self.plugin = None
         self.network = None
         self.exec_network = None
-        self.inference_request = None
-        self.input_blob = None
-        self.output_blob = None
-        
+        self.input_layer = None
+        self.output_layer = None
+
     def load_model(self, model, device="CPU", cpu_extension=None):
 
         model_xml = model
@@ -65,27 +64,26 @@ class Network:
       
         self.exec_network = self.plugin.load_network(self.network, device)
         
-        self.input_blob = next(iter(self.network.inputs))
-        self.output_blob = next(iter(self.network.outputs))
+        self.input_layer = next(iter(self.network.inputs))
+        self.output_layer = next(iter(self.network.outputs))
         
         return self.plugin
 
-
     def get_input_shape(self):
-
-        return self.network.inputs[self.input_blob].shape
+        
+        return self.network.inputs[self.input_layer].shape
 
     def exec_net(self, image):
 
-        self.inference_request = self.exec_network.start_async(0, {self.input_blob: image})
+        self.inference_request = self.exec_network.start_async(0, {self.input_layer: image})
 
         return self.inference_request
-    
-    def wait(self,request_id):
 
+    def wait(self, request_id):
+ 
         return self.exec_network.requests[request_id].wait(-1)
 
     def get_output(self):
-
-        output = self.inference_request.outputs[self.output_blob]
+ 
+        output = self.inference_request.outputs[self.output_layer]
         return output

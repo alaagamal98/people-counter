@@ -25,7 +25,7 @@ import time
 import socket
 import json
 import cv2
-import logging as log
+import numpy as np
 import paho.mqtt.client as mqtt
 from argparse import ArgumentParser
 from inference import Network
@@ -37,18 +37,16 @@ MQTT_HOST = IPADDRESS
 MQTT_PORT = 3001
 MQTT_KEEPALIVE_INTERVAL = 60
 
-
 def build_argparser():
     """
     Parse command line arguments.
-
     :return: command line arguments
     """
     parser = ArgumentParser()
     parser.add_argument("-m", "--model", required=True, type=str,
                         help="Path to an xml file with a trained model.")
     parser.add_argument("-i", "--input", required=True, type=str,
-                        help="Path to image or video file")
+                        help="Path to image or video file or enter cam for webcam")
     parser.add_argument("-l", "--cpu_extension", required=False, type=str,
                         default=None,
                         help="MKLDNN (CPU)-targeted custom layers."
@@ -59,13 +57,32 @@ def build_argparser():
                              "CPU, GPU, FPGA or MYRIAD is acceptable. Sample "
                              "will look for a suitable plugin for device "
                              "specified (CPU by default)")
-    parser.add_argument("-pt", "--probability_threshold", type=float, default=0.5,
+    parser.add_argument("-pt", "--prob_threshold", type=float, default=0.5,
                         help="Probability threshold for detections filtering"
                         "(0.5 by default)")
     return parser
 
+def extract_box(image, output, confidance_level=0.55):
+
+    height  = image.shape[0]
+    width = image.shape[1]
+    bounding_box = output[0,0,:,3:7] * np.array([width, height , width, height ])
+    bounding_box = bounding_box.astype(np.int32)
+    confidance = output[0,0,:,2]
+    counter=0
+    p_1 = None
+    p_2 = None
+    for i in range(len(bounding_box)):
+        if  confidance[i]<confidance_level:
+            continue
+        p_1 = (bounding_box[i][0], bounding_box[i][1])
+        p_2 = (bounding_box[i][2], bounding_box[i][3])
+        cv2.rectangle(image, p_1, p_2, (0,255,0))
+        counter+=1
+    return image, counter, (p_1,p_2)
 
 def connect_mqtt():
+
     client = mqtt.Client()
     client.connect(MQTT_HOST, MQTT_PORT, MQTT_KEEPALIVE_INTERVAL)
     return client
@@ -75,15 +92,12 @@ def infer_on_stream(args, client):
     """
     Initialize the inference network, stream video to network,
     and output stats and video.
-
     :param args: Command line arguments parsed by `build_argparser()`
     :param client: MQTT client
     :return: None
     """
-    # Initialise the class
+    
     infer_network = Network()
-    # Set Probability threshold for detections
-    probability_threshold = args.probability_threshold
     one_image = False
 
     infer_network.load_model(args.model, args.device, args.cpu_extension)
@@ -98,27 +112,27 @@ def infer_on_stream(args, client):
         assert os.path.isfile(args.input), "file doesn't exist"
         
     cap = cv2.VideoCapture(validator)
-    width = int(cap.get(3))
-    height = int(cap.get(4))
+ 
     if validator:
         cap.open(args.input)
-    if not cap.isOpened():
-        log.error("Error: No video source")
     
-    ### Variables
-    previous_duration = 0
-    dur = 0
-    req_id=0
-    dur_report = None
-    report = 0
-    counter = 0
-    previous_counter = 0
+    if (cap.isOpened()== False): 
+        exit(1)
+        
+    total_counter=0
+    pres_counter = 0
+    prev_counter=0
+    beginning_time=0 
+    num_bounding_box=0
+    timing=0
+    prev_bounding_box = 0
+    req_id = 0
     total_counter = 0
 
     while cap.isOpened():
-
+        
         flag, frame = cap.read()
-        probability_threshold = args.probability_threshold
+        probability_threshold = args.prob_threshold
         if not flag:
             break
         key_pressed = cv2.waitKey(60)
@@ -132,56 +146,51 @@ def infer_on_stream(args, client):
         if infer_network.wait(req_id) == 0:
 
             network_output = infer_network.get_output()
-
-            check = 0
-            probabilities = network_output[0, 0, :, 2]
-            for i, p in enumerate(probabilities):
-                if p > probability_threshold:
-                    check += 1
-                    box = network_output[0, 0, i, 3:]
-                    p_1 = (int(box[0] * width), int(box[1] * height))
-                    p_2 = (int(box[2] * width), int(box[3] * height))
-                    frame = cv2.rectangle(frame, p_1, p_2, (0, 255, 0), 3)
+            
+            frame, pres_counter, bounding_box = frame, pres_counter, bounding_box = extract_box(frame.copy(), network_output, probability_threshold)
+            box_width = frame.shape[1]
+            tl, br = bounding_box 
         
-            if check != counter:
-                previous_counter = counter
-                counter = check
-                if dur >= 3:
-                    previous_duration = dur
-                    dur = 0
-                else:
-                    dur = previous_duration + dur
-                    previous_duration = 0  
-            else:
-                dur += 1
-                if dur >= 3:
-                    report = counter
-                    if dur == 3 and counter > previous_counter:
-                        total_counter += counter - previous_counter
-                    elif dur == 3 and counter < previous_counter:
-                        dur_report = int((previous_duration / 10.0) * 1000)
+            if pres_counter>prev_counter:
+                beginning_time = time.time()
+                total_counter+=pres_counter-prev_counter
+                num_bounding_box=0
+                client.publish("person", json.dumps({"total":total_counter}))
 
-            client.publish('person',
-                           payload=json.dumps({
-                               'count': report, 'total': total_counter}),
-                           qos=0, retain=False)
-            if dur_report is not None:
-                client.publish('person/duration',
-                               payload=json.dumps({'duration': dur_report}),
-                               qos=0, retain=False)
+            elif pres_counter<prev_counter:
+                if num_bounding_box<=20:
+                    pres_counter=prev_counter
+                    num_bounding_box+=1
+                elif prev_bounding_box<box_width-200:
+                    pres_counter=prev_counter
+                    num_bounding_box=0
+                else:
+                    timing = int(time.time()-beginning_time)
+                    client.publish("person/time", json.dumps({"time":timing}))
+
+            if not (tl==None and br==None):
+                prev_bounding_box=int((tl[0]+br[0])/2)
+            prev_counter=pres_counter
+                    
+            client.publish("person", json.dumps({"count":pres_counter}))
+                    
+            
+        frame = frame.copy(order='C')
 
         sys.stdout.buffer.write(frame)
         sys.stdout.flush()
 
-        if one_image:
-            cv2.imwrite('output_image.jpg', frame)
+
+    if one_image:
+        cv2.imwrite('output_image.jpg', frame)
             
+
     cap.release()
-    cv2.destroyAllWindows()
+    client.disconnect()
+
 def main():
     """
     Load the network and parse the output.
-
     :return: None
     """
     # Grab command line args
